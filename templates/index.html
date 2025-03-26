@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vipul Singh's Interview Voice Bot </title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #e0eafc, #cfdef3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #7f8c8d;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        .input-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 25px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        input[type="text"] {
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+        input[type="text"]:focus {
+            border-color: #3498db;
+        }
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            min-height: 100px;
+            font-size: 15px;
+            color: #34495e;
+            text-align: left;
+            line-height: 1.5;
+            position: relative;
+        }
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            border: 4px solid #3498db;
+            border-top: 4px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vipul Singh’s Interview Voice Bot</h1>
+        <p>Ask me anything about my experience and skills, and I’ll respond!</p>
+        <div class="input-section">
+            <button onclick="startListening()">Ask a Question (Voice)</button>
+            <input type="text" id="textInput" placeholder="Or type your question here..." />
+            <button onclick="submitTextQuestion()">Submit (Text)</button>
+        </div>
+        <div id="response">
+            <div class="loading" id="loadingSpinner"></div>
+        </div>
+        <div class="footer">Built by Vipul Singh for Home.LLC</div>
+    </div>
+
+    <script>
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+
+        const synth = window.speechSynthesis;
+        const loadingSpinner = document.getElementById('loadingSpinner');
+
+        // Function to show/hide loading spinner
+        function toggleLoading(show) {
+            loadingSpinner.style.display = show ? 'block' : 'none';
+        }
+
+        // Function to handle both voice and text questions
+        async function askQuestion(question) {
+            document.getElementById('response').innerText = `You asked: ${question}\nProcessing...`;
+            toggleLoading(true);
+            console.log(`Question captured: ${question}`);
+
+            try {
+                const response = await fetch('http://localhost:5000/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+
+                console.log('Fetch response status:', response.status);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! Status: ${response.status}, Details: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                if (data.error) {
+                    document.getElementById('response').innerText = `Error: ${data.error}`;
+                    const utterance = new SpeechSynthesisUtterance(`Error: ${data.error}`);
+                    synth.speak(utterance);
+                    toggleLoading(false);
+                    return;
+                }
+
+                // Display and speak the response
+                document.getElementById('response').innerText = `You asked: ${data.question}\nI said: ${data.response}`;
+                const utterance = new SpeechSynthesisUtterance(data.response);
+                synth.speak(utterance);
+                toggleLoading(false);
+            } catch (error) {
+                console.error('Fetch error:', error);
+                document.getElementById('response').innerText = `Error: ${error.message}. Please try again.`;
+                const utterance = new SpeechSynthesisUtterance(`Error: ${error.message}. Please try again.`);
+                synth.speak(utterance);
+                toggleLoading(false);
+            }
+        }
+
+        // Voice input handler
+        recognition.onresult = async (event) => {
+            const question = event.results[0][0].transcript;
+            askQuestion(question);
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            document.getElementById('response').innerText = `Speech recognition error: ${event.error}. Please try again or use the text input.`;
+            const utterance = new SpeechSynthesisUtterance(`Speech recognition error: ${event.error}. Please try again or use the text input.`);
+            synth.speak(utterance);
+            toggleLoading(false);
+        };
+
+        function startListening() {
+            document.getElementById('response').innerText = "Listening...";
+            console.log("Starting speech recognition...");
+            recognition.start();
+        }
+
+        // Text input handler
+        function submitTextQuestion() {
+            const question = document.getElementById('textInput').value.trim();
+            if (!question) {
+                document.getElementById('response').innerText = "Error: Please enter a question.";
+                const utterance = new SpeechSynthesisUtterance("Error: Please enter a question.");
+                synth.speak(utterance);
+                toggleLoading(false);
+                return;
+            }
+            document.getElementById('textInput').value = ''; // Clear the input
+            askQuestion(question);
+        }
+
+        // Allow pressing Enter to submit the text question
+        document.getElementById('textInput').addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                submitTextQuestion();
+            }
+        });
+    </script>
+</body>
+</html>
